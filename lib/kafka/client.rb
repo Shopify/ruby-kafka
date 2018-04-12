@@ -527,6 +527,11 @@ module Kafka
       @cluster.create_partitions_for(name, num_partitions: num_partitions, timeout: timeout)
     end
 
+    # Lists all brokers in the cluster.  Note this _always_ returns an up-to-date set of brokers.
+    def brokers
+      @cluster.refresh_metadata!.brokers
+    end
+
     # Lists all topics in the cluster.
     #
     # @return [Array<String>] the list of topic names.
