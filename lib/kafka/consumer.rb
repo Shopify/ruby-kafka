@@ -244,6 +244,11 @@ module Kafka
     # @return [nil]
     def each_batch(min_bytes: 1, max_wait_time: 1, automatically_mark_as_processed: true, exit_if: nil)
       consumer_loop do
+        if exit_if && exit_if.call
+          @running = false
+          break
+        end
+
         batches = fetch_batches(min_bytes: min_bytes, max_wait_time: max_wait_time)
 
         batches.each do |batch|
