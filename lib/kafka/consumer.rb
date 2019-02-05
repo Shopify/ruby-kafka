@@ -281,7 +281,7 @@ module Kafka
     #   messages can be committed to Kafka.
     # @yieldparam batch [Kafka::FetchedBatch] a message batch fetched from Kafka.
     # @return [nil]
-    def each_batch(min_bytes: 1, max_bytes: 10485760, max_wait_time: 1, automatically_mark_as_processed: true)
+    def each_batch(min_bytes: 1, max_bytes: 10485760, max_wait_time: 1, automatically_mark_as_processed: true, exit_if: nil)
       @fetcher.configure(
         min_bytes: min_bytes,
         max_bytes: max_bytes,
@@ -289,6 +289,11 @@ module Kafka
       )
 
       consumer_loop do
+        if exit_if && exit_if.call
+          @running = false
+          break
+        end
+
         batches = fetch_batches
 
         batches.each do |batch|
@@ -335,6 +340,7 @@ module Kafka
           @offset_manager.commit_offsets_if_necessary
 
           trigger_heartbeat
+          @running = false if exit_if && exit_if.call
 
           return if !@running
         end
