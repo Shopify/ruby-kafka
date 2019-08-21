@@ -10,10 +10,11 @@ module Kafka
       def initialize(group_id:, session_timeout:, member_id:, topics: [])
         @group_id = group_id
         @session_timeout = session_timeout * 1000 # Kafka wants ms.
+        @rebalance_timeout = rebalance_timeout * 1000 || @session_timeout
         @member_id = member_id || ""
         @protocol_type = PROTOCOL_TYPE
         @group_protocols = {
-          "standard" => ConsumerGroupProtocol.new(topics: ["test-messages"]),
+          "standard" => ConsumerGroupProtocol.new(version: 1, topics: ["test-messages"]),
         }
       end
 
@@ -28,6 +29,7 @@ module Kafka
       def encode(encoder)
         encoder.write_string(@group_id)
         encoder.write_int32(@session_timeout)
+        encoder.write_int32(@rebalance_timeout)
         encoder.write_string(@member_id)
         encoder.write_string(@protocol_type)
 
