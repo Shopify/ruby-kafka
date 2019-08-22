@@ -38,7 +38,7 @@ describe "Consumer API", functional: true do
           mutex.synchronize do
             received_messages << message
 
-            if received_messages.uniq.count == messages.count
+            if received_messages.count == messages.count
               consumers.each(&:stop)
             end
           end
@@ -117,10 +117,6 @@ describe "Consumer API", functional: true do
     num_partitions = 3
     topic = create_random_topic(num_partitions: num_partitions)
     messages = (1..100).to_a
-    expected_messages = []
-    messages.each do |i|
-      expected_messages << { :value => i.to_s, :partition => i % 3 }
-    end
 
     mutex = Mutex.new
     var = ConditionVariable.new
@@ -160,7 +156,6 @@ describe "Consumer API", functional: true do
 
         consumer.each_message do |message|
           if message.value.nil?
-            consumer.commit_offsets
             consumer.stop
           else
             mutex.synchronize do
@@ -239,19 +234,18 @@ describe "Consumer API", functional: true do
 
     consumers = 2.times.map do
       kafka = Kafka.new(seed_brokers: kafka_brokers, client_id: "test", logger: logger)
-      consumer = kafka.consumer(group_id: group_id, offset_commit_threshold: 1)
+      consumer = kafka.consumer(group_id: group_id)
       consumer.subscribe(topic)
       consumer
     end
 
     threads = consumers.map do |consumer|
       t = Thread.new do
-        # received_messages[Thread.current] = []
+        received_messages[Thread.current] = []
         consumer.each_message do |message|
-          received_messages[message.partition] ||= []
-          received_messages[message.partition] << message
+          received_messages[Thread.current] << message
 
-          if received_messages[message.partition].count == message_count
+          if received_messages[Thread.current].count == message_count
             consumer.stop
           end
         end
@@ -358,7 +352,7 @@ describe "Consumer API", functional: true do
       @consumer_1_messages = []
       consumer_1_thread = Thread.new do
         kafka = Kafka.new(seed_brokers: kafka_brokers, client_id: "test")
-        consumer = kafka.consumer(group_id: group_id, offset_commit_threshold: 1)
+        consumer = kafka.consumer(group_id: group_id)
         consumer.subscribe(topic)
         consumer.each_message do |message|
           @consumer_1_messages << message
@@ -377,7 +371,7 @@ describe "Consumer API", functional: true do
       @consumer_2_messages = []
       consumer_2_thread = Thread.new do
         kafka = Kafka.new(seed_brokers: kafka_brokers, client_id: "test")
-        consumer = kafka.consumer(group_id: group_id, offset_commit_threshold: 1)
+        consumer = kafka.consumer(group_id: group_id)
         consumer.subscribe(topic)
         consumer.each_message do |message|
           @consumer_2_messages << message
