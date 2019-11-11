@@ -7,6 +7,7 @@ module Kafka
     attr_reader :queue
 
     def initialize(cluster:, logger:, instrumenter:, max_queue_size:, group:)
+      @pauses = {}
       @cluster = cluster
       @logger = TaggedLogger.new(logger)
       @instrumenter = instrumenter
@@ -168,12 +169,22 @@ module Kafka
         end
 
         @next_offsets[batch.topic][batch.partition] = batch.last_offset + 1 unless batch.unknown_last_offset?
+        @pauses.delete([batch.topic,batch.partition])
       end
 
       @queue << [:batches, batches, current_reset_counter]
     rescue Kafka::NoPartitionsToFetchFrom
       @logger.warn "No partitions to fetch from, sleeping for 1s"
       sleep 1
+    rescue Kafka::OffsetOutOfRange => e
+      pair = [e.topic,e.partition]
+      if @pauses.member?(pair)
+        @logger.warn "Enqueuing Error After Pause"
+        @queue << [:exception, e]
+      else
+        @logger.warn "Pausing #{pair} for 1 second!"
+        @pauses[pair] = Time.now + 1
+      end
     rescue Kafka::Error => e
       @queue << [:exception, e]
     end
@@ -194,6 +205,10 @@ module Kafka
         max_bytes = @max_bytes_per_partition[topic]
 
         partitions.each do |partition, offset|
+          pair = [topic,partition]
+          if @pauses.member?(pair) && @pauses[pair] > Time.now
+            next
+          end
           operation.fetch_from_partition(topic, partition, offset: offset, max_bytes: max_bytes)
         end
       end
